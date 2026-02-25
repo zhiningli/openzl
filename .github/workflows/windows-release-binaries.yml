@@ -1,0 +1,84 @@
+# Copyright (c) Meta Platforms, Inc. and affiliates.
+
+name: Windows Release Binaries
+
+# This workflow builds pre-compiled Windows x64 CLI binaries (zli).
+# Triggered on release publish or manually via workflow_dispatch.
+# Binaries are uploaded as GitHub Actions artifacts for download.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+
+jobs:
+  # =============================================================================#
+  # WINDOWS X64 BINARY
+  # =============================================================================#
+  build-windows-x64:
+    name: Windows X64 CLI Binary
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup MSYS2 with MinGW-w64
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          install: make diffutils cmake git mingw-w64-x86_64-gcc
+          update: true
+
+      - name: Show build environment
+        run: |
+          echo "=== Build environment ==="
+          gcc --version
+          g++ --version
+          make --version
+          echo "=== Build environment verified ==="
+
+
+      - name: Build dependencies
+        run: |
+          echo "=== Building dependencies ==="
+          make -j builddeps
+          echo "=== Dependencies built ==="
+
+
+      - name: Build zli CLI (statically linked)
+        run: |
+          echo "=== Building zli CLI executable ==="
+          LDFLAGS="-static" make -j zli BUILD_TYPE=OPT V=1
+          echo "=== zli CLI executable build completed ==="
+
+
+      - name: Prepare release artifact
+        run: |
+          echo "=== Preparing release artifact ==="
+          mkdir release
+          cp zli.exe release/openzl-cli-windows-x64.exe
+          echo "=== Release artifact prepared ==="
+          ls -la release
+
+      - name: Verify release artifact
+        run: |
+          echo "=== Verifying binary runs standalone ==="
+          ./release/openzl-cli-windows-x64.exe --version
+          echo "=== Checking for non-system DLL dependencies ==="
+          objdump -p release/openzl-cli-windows-x64.exe | grep "DLL Name" || true
+          echo "=== Checking binary size ==="
+          ls -lh release/openzl-cli-windows-x64.exe
+          echo "=== Release artifact verified ==="
+
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: openzl-cli-windows-x64
+          path: release\openzl-cli-windows-x64.exe
+          retention-days: 30
+
