@@ -1,114 +1,25 @@
 // Copyright (c) Meta Platforms, Inc. and affiliates.
 
-#include <gtest/gtest.h>
-#include <iomanip>
-#include <sstream>
-
-#include "tools/sddl2/compiler/Compiler.h"
-#include "tools/sddl2/compiler/Exception.h"
-#include "tools/sddl2/compiler/parser/AST.h"
-
-using namespace testing;
+#include "tools/sddl2/compiler/tests/CompilerTest.h"
 
 namespace openzl::sddl2::tests {
 
 namespace {
-using ArgVec = std::vector<ASTPtr>;
-
-// Helper class to check that the tokenization/grouper/parser steps are working
-// as expected
-class ASTCompiler : public Compiler {
-   public:
-    explicit ASTCompiler(Compiler::Options options)
-            : Compiler{ std::move(options) }
-    {
-    }
-
-    ASTVec compile(std::string_view source, std::string_view filename)
-    {
-        const Source src{ source, filename };
-        const auto tokens = tokenizer_.tokenize(src);
-        const auto groups = grouper_.group(tokens);
-        const auto tree   = parser_.parse(groups);
-
-        return tree;
-    }
-};
-
-void expect_node_eq(const ASTNode& lhs, const ASTNode& rhs)
-{
-    // Compare by printing to string - this works for all AST node types
-    std::ostringstream lhs_ss, rhs_ss;
-    lhs.print(lhs_ss, 0);
-    rhs.print(rhs_ss, 0);
-    EXPECT_EQ(lhs_ss.str(), rhs_ss.str());
-}
+class ParserTest : public CompilerTest {};
 } // namespace
 
-class CompilerTest : public Test {
-   protected:
-    void SetUp() override
-    {
-        compiler_ = std::make_unique<Compiler>(
-                Compiler::Options{}.with_log(logs_).with_verbosity(verbosity_));
-        ast_compiler_ = std::make_unique<ASTCompiler>(
-                Compiler::Options{}.with_log(logs_).with_verbosity(verbosity_));
-    }
-
-    void expect_error(std::string_view source, std::string_view msg)
-    {
-        try {
-            compiler_->compile(source, "[local_input]");
-        } catch (const CompilerException& ex) {
-            EXPECT_NE(std::string{ ex.what() }.find(msg), std::string::npos)
-                    << std::quoted(ex.what()) << "\nShould contain:\n  "
-                    << std::quoted(msg) << "\n"
-                    << "Compiler debug logs:\n"
-                    << logs_.str();
-            return;
-        }
-        EXPECT_TRUE(false) << "Should have thrown a CompilerException!\n"
-                           << "Compiler debug logs:\n"
-                           << logs_.str();
-    }
-
-    void expect_success(std::string_view source)
-    {
-        EXPECT_NO_THROW(compiler_->compile(source, "[local_input]"))
-                << "Compiler debug logs:\n"
-                << logs_.str();
-    }
-
-    void expect_ast(std::string_view source, ASTVec expected)
-    {
-        const auto actual = ast_compiler_->compile(source, "[local_input]");
-
-        EXPECT_EQ(actual.size(), expected.size());
-        for (size_t i = 0; i < actual.size(); ++i) {
-            auto& actual_node   = *actual.at(i);
-            auto& expected_node = *expected.at(i);
-            expect_node_eq(actual_node, expected_node);
-        }
-    }
-
-    int verbosity_{ 3 };
-    std::stringstream logs_;
-    std::unique_ptr<Compiler> compiler_;
-    std::unique_ptr<ASTCompiler> ast_compiler_;
-};
-
-TEST_F(CompilerTest, ErrorMsgOpsMissingArgs)
+TEST_F(ParserTest, ErrorMsgOpsMissingArgs)
 {
     expect_error("foo = \n", "Rule requires 1 rhs args but 0 found.");
     expect_error("= foo\n", "Rule requires a lhs arg but none found.");
 }
 
-TEST_F(CompilerTest, ErrorMsgEmptyExpr)
+TEST_F(ParserTest, ErrorMsgEmptyExpr)
 {
     expect_error("()", "Empty expression");
 }
 
-TEST_F(CompilerTest, ErrorMsgNoOperatorBetweenSubExpressions)
+TEST_F(ParserTest, ErrorMsgNoOperatorBetweenSubExpressions)
 {
     const auto prog = R"(
         tmp = 9 + 10 11 + 12
@@ -116,7 +27,7 @@ TEST_F(CompilerTest, ErrorMsgNoOperatorBetweenSubExpressions)
     expect_error(prog, "Expected operator between expressions");
 }
 
-TEST_F(CompilerTest, ErrorMsgTwoOperatorsBetweenSubExpressions)
+TEST_F(ParserTest, ErrorMsgTwoOperatorsBetweenSubExpressions)
 {
     const auto prog = R"(
         tmp = 9 + 10 + + 11 + 12
@@ -124,7 +35,7 @@ TEST_F(CompilerTest, ErrorMsgTwoOperatorsBetweenSubExpressions)
     expect_error(prog, "Failed to match args for rule");
 }
 
-TEST_F(CompilerTest, ParseSimpleOps)
+TEST_F(ParserTest, ParseSimpleOps)
 {
     const auto prog = R"(
         # arithmetic operators
@@ -156,28 +67,7 @@ TEST_F(CompilerTest, ParseSimpleOps)
     expect_success(prog);
 }
 
-TEST_F(CompilerTest, MildlyVexingParsing)
-{
-    const auto prog = R"(
-        b : B = Byte
-        expect b == 1
-        b = - : B
-        expect b == -2
-        : B
-        b : B
-        expect b == 4
-        : B = Byte
-        b : B
-        expect b == 6
-        : B
-        A = B[--:B]
-        : A
-    )";
-
-    expect_success(prog);
-}
-
-TEST_F(CompilerTest, ConsumeBuiltinFieldsAST)
+TEST_F(ParserTest, ConsumeBuiltinFieldsAST)
 {
     const auto prog     = R"(
         # integer numeric types
@@ -236,20 +126,22 @@ TEST_F(CompilerTest, ConsumeBuiltinFieldsAST)
     expect_ast(prog, expected);
 }
 
-TEST_F(CompilerTest, UnaryNegationAST)
+TEST_F(ParserTest, UnaryNegationAST)
 {
     const auto prog = R"(
         tmp = 10 - - 11
+        expect tmp == 21
     )";
 
     const auto cg       = Codegen(SourceLocation::null());
     const auto expected = std::vector<ASTPtr>({
-            cg.assign(cg.var("tmp"), cg.sub(cg.num(10), cg.num(-11))),
+            cg.assign(cg.var("tmp"), cg.sub(cg.num(10), cg.neg(cg.num(11)))),
+            cg.expect(cg.eq(cg.var("tmp"), cg.num(21))),
     });
     expect_ast(prog, expected);
 }
 
-TEST_F(CompilerTest, SimpleArithmeticAST)
+TEST_F(ParserTest, SimpleArithmeticAST)
 {
     const auto prog = R"(
        expect 1 + 2 == 3
@@ -262,7 +154,7 @@ TEST_F(CompilerTest, SimpleArithmeticAST)
     expect_ast(prog, expected);
 }
 
-TEST_F(CompilerTest, ArrayAST)
+TEST_F(ParserTest, ArrayAST)
 {
     const auto prog = R"(
         len =  1 + 2
@@ -280,26 +172,29 @@ TEST_F(CompilerTest, ArrayAST)
     expect_ast(prog, expected);
 }
 
-TEST_F(CompilerTest, RecordAST)
+TEST_F(ParserTest, RecordAST)
 {
     const auto prog = R"(
         Record Entry() = {
             id: Int32LE,
         }
+        : Entry
     )";
 
     const auto cg       = Codegen(SourceLocation::null());
-    const auto expected = std::vector<ASTPtr>({ cg.assign(
-            cg.var("Entry"),
-            cg.record(
-                    ArgVec{},
-                    ArgVec{ cg.assume(
-                            cg.var("id"),
-                            cg.builtin_field(Symbol::I32LE)) })) });
+    const auto expected = std::vector<ASTPtr>(
+            { cg.assign(
+                      cg.var("Entry"),
+                      cg.record(
+                              ArgVec{},
+                              ArgVec{ cg.assume(
+                                      cg.var("id"),
+                                      cg.builtin_field(Symbol::I32LE)) })),
+              cg.consume(cg.var("Entry")) });
     expect_ast(prog, expected);
 }
 
-TEST_F(CompilerTest, AnonymousRecordAST)
+TEST_F(ParserTest, AnonymousRecordAST)
 {
     const auto prog = R"(
         : Record() {id: Int32LE, val: Int32LE}
@@ -315,10 +210,11 @@ TEST_F(CompilerTest, AnonymousRecordAST)
     expect_ast(prog, expected);
 }
 
-TEST_F(CompilerTest, ParenthesesOverridePrecedenceAST)
+TEST_F(ParserTest, ParenthesesOverridePrecedenceAST)
 {
     const auto prog = R"(
         tmp = (1 - 2) * 3
+        expect tmp == -3
     )";
 
     const auto cg       = Codegen(SourceLocation::null());
@@ -326,14 +222,16 @@ TEST_F(CompilerTest, ParenthesesOverridePrecedenceAST)
             cg.assign(
                     cg.var("tmp"),
                     cg.mul(cg.sub(cg.num(1), cg.num(2)), cg.num(3))),
+            cg.expect(cg.eq(cg.var("tmp"), cg.neg(cg.num(3)))),
     });
     expect_ast(prog, expected);
 }
 
-TEST_F(CompilerTest, NestedParenthesesAST)
+TEST_F(ParserTest, NestedParenthesesAST)
 {
     const auto prog = R"(
         tmp = ((1 + 2) * (3 + 4))
+        expect tmp == 21
     )";
 
     const auto cg       = Codegen(SourceLocation::null());
@@ -342,14 +240,16 @@ TEST_F(CompilerTest, NestedParenthesesAST)
                     cg.var("tmp"),
                     cg.mul(cg.add(cg.num(1), cg.num(2)),
                            cg.add(cg.num(3), cg.num(4)))),
+            cg.expect(cg.eq(cg.var("tmp"), cg.num(21))),
     });
     expect_ast(prog, expected);
 }
 
-TEST_F(CompilerTest, ComplexArithmeticExpressionAST)
+TEST_F(ParserTest, ComplexArithmeticExpressionAST)
 {
     const auto prog = R"(
         tmp = 1 + 2 * 3 - 4 / 2
+        expect tmp == 5
     )";
 
     const auto cg       = Codegen(SourceLocation::null());
@@ -358,11 +258,12 @@ TEST_F(CompilerTest, ComplexArithmeticExpressionAST)
                     cg.var("tmp"),
                     cg.sub(cg.add(cg.num(1), cg.mul(cg.num(2), cg.num(3))),
                            cg.div(cg.num(4), cg.num(2)))),
+            cg.expect(cg.eq(cg.var("tmp"), cg.num(5))),
     });
     expect_ast(prog, expected);
 }
 
-TEST_F(CompilerTest, SimpleSaoAST)
+TEST_F(ParserTest, SimpleSaoAST)
 {
     const auto prog = R"(
         # Star catalog entry (28 bytes)
@@ -412,4 +313,5 @@ TEST_F(CompilerTest, SimpleSaoAST)
     });
     expect_ast(prog, expected);
 }
+
 } // namespace openzl::sddl2::tests

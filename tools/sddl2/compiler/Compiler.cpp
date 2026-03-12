@@ -14,7 +14,10 @@ Compiler::Compiler(Options options)
           logger_(*options_.log_os, options_.verbosity),
           tokenizer_(logger_),
           grouper_(logger_),
-          parser_(logger_)
+          parser_(logger_),
+          semantic_analyzer_(logger_),
+          optimizer_(logger_),
+          codegen_(logger_)
 {
 }
 
@@ -100,7 +103,8 @@ Compiler::Compiler(Options options)
  *    ]
  *    ```
  *
- * 4. Serialization: (TODO)
+ * 4. Codegen:
+ *    Transforms the expression tree into assembly instructions.
  */
 
 std::string Compiler::compile(
@@ -111,8 +115,9 @@ std::string Compiler::compile(
     const auto tokens = tokenizer_.tokenize(src);
     const auto groups = grouper_.group(tokens);
     const auto tree   = parser_.parse(groups);
-    // TODO: serialize the ast
-    return "";
+    semantic_analyzer_.analyze(tree);
+    const auto optimized = optimizer_.optimize(tree);
+    return codegen_.generate(optimized);
 }
 
 Compiler::Options::Options() {}

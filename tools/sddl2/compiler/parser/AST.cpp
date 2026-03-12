@@ -207,8 +207,10 @@ int64_t ASTNum::val() const
     return val_;
 }
 
-ASTVar::ASTVar(const Token& token)
-        : ASTConverted(token.loc()), name_(token.word())
+ASTVar::ASTVar(const Token& token, bool is_last_reference)
+        : ASTConverted(token.loc()),
+          name_(token.word()),
+          is_last_reference_(is_last_reference)
 {
 }
 
@@ -219,7 +221,21 @@ const ASTVar* ASTVar::as_var() const
 
 void ASTVar::print(std::ostream& os, size_t indent) const
 {
-    os << std::string(indent, ' ') << "Var: " << name_ << std::endl;
+    os << std::string(indent, ' ') << "Var: " << name_;
+    if (is_last_reference_) {
+        os << " (last ref)";
+    }
+    os << std::endl;
+}
+
+const std::string& ASTVar::name() const
+{
+    return name_;
+}
+
+bool ASTVar::is_last_reference() const
+{
+    return is_last_reference_;
 }
 
 ASTBuiltinField::ASTBuiltinField(const SourceLocation& loc, const Symbol& sym)
@@ -238,6 +254,11 @@ void ASTBuiltinField::print(std::ostream& os, size_t indent) const
        << std::endl;
 }
 
+const Symbol& ASTBuiltinField::kw() const
+{
+    return kw_;
+}
+
 ASTBytes::ASTBytes(const SourceLocation& loc, const ASTPtr& len)
         : ASTField(loc + some(len).loc()), len_(extract_len(len))
 {
@@ -253,6 +274,11 @@ void ASTBytes::print(std::ostream& os, size_t indent) const
     os << std::string(indent, ' ') << "Field: BYTES:" << std::endl;
     os << std::string(indent + 2, ' ') << "Len: " << std::endl;
     len_->print(os, indent + 4);
+}
+
+const ASTPtr& ASTBytes::len() const
+{
+    return len_;
 }
 
 ASTPtr ASTBytes::extract_len(const ASTPtr& paren_ptr)
@@ -300,6 +326,16 @@ void ASTRecord::print(std::ostream& os, size_t indent) const
     for (const auto& field : fields_) {
         field->print(os, indent + 4);
     }
+}
+
+const ASTVec& ASTRecord::params() const
+{
+    return params_;
+}
+
+const ASTVec& ASTRecord::fields() const
+{
+    return fields_;
 }
 
 ASTVec ASTRecord::extract_fields(
@@ -360,6 +396,16 @@ void ASTArray::print(std::ostream& os, size_t indent) const
     }
 }
 
+const ASTPtr& ASTArray::field() const
+{
+    return field_;
+}
+
+const ASTPtr& ASTArray::len() const
+{
+    return len_;
+}
+
 ASTOp::ASTOp(const SourceLocation& loc, const Op& op, ASTVec args)
         : ASTConverted(loc + join_locs(args)), op_(op), args_(std::move(args))
 {
@@ -378,4 +424,15 @@ void ASTOp::print(std::ostream& os, size_t indent) const
         arg->print(os, indent + 2);
     }
 }
+
+const Op& ASTOp::op() const
+{
+    return op_;
+}
+
+const ASTVec& ASTOp::args() const
+{
+    return args_;
+}
+
 } // namespace openzl::sddl2

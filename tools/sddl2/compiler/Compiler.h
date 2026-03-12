@@ -8,8 +8,11 @@
 #include "openzl/cpp/poly/StringView.hpp"
 
 #include "tools/sddl2/compiler/Logger.h"
+#include "tools/sddl2/compiler/codegen/CodeGenerator.h"
 #include "tools/sddl2/compiler/grouper/Grouper.h"
+#include "tools/sddl2/compiler/optimizer/Optimizer.h"
 #include "tools/sddl2/compiler/parser/Parser.h"
+#include "tools/sddl2/compiler/semantic_analyzer/SemanticAnalyzer.h"
 #include "tools/sddl2/compiler/tokenizer/Tokenizer.h"
 
 namespace openzl::sddl2 {
@@ -121,6 +124,9 @@ class Compiler {
     const Tokenizer tokenizer_;
     const Grouper grouper_;
     const Parser parser_;
+    const SemanticAnalyzer semantic_analyzer_;
+    const Optimizer optimizer_;
+    const CodeGenerator codegen_;
 };
 
 } // namespace openzl::sddl2

@@ -60,6 +60,7 @@ static ZL_Report DTM_storeTransformName(
         DTransforms_manager* dtm,
         const char** namePtr)
 {
+    ZL_RESULT_DECLARE_SCOPE_REPORT(NULL); // T258630070
     const char* name = *namePtr;
     if (name != NULL) {
         const size_t len = strlen(name) + 1;
@@ -197,6 +198,7 @@ static ZL_Report pipeTransformWrapper(
         const ZL_Data* ins[],
         size_t nbIns)
 {
+    ZL_RESULT_DECLARE_SCOPE_REPORT(dictx);
     ZL_ASSERT_NN(ins);
     ZL_ASSERT_EQ(nbIns, 1);
     (void)nbIns;
@@ -210,20 +212,20 @@ static ZL_Report pipeTransformWrapper(
     }
 
     ZL_Output* const out = ZL_Decoder_create1OutStream(dictx, dstCapacity, 1);
-    ZL_RET_R_IF_NULL(allocation, out);
+    ZL_ERR_IF_NULL(out, allocation);
 
     void* const dst = ZL_Output_ptr(out);
     size_t const dstSize =
             transform->implDesc.dpt.transform_f(dst, dstCapacity, src, srcSize);
 
-    ZL_RET_R_IF_GT(
-            transform_executionFailure,
+    ZL_ERR_IF_GT(
             dstSize,
             dstCapacity,
+            transform_executionFailure,
             "transform %s failed",
             DT_getTransformName(transform));
 
-    ZL_RET_R_IF_ERR(ZL_Output_commit(out, dstSize));
+    ZL_ERR_IF_ERR(ZL_Output_commit(out, dstSize));
 
     return ZL_returnValue(1);
 }
@@ -264,6 +266,7 @@ static ZL_Report splitTransformWrapper(
         ZL_Data const* ins[],
         size_t nbIns)
 {
+    ZL_RESULT_DECLARE_SCOPE_REPORT(dictx);
     size_t const nbInputStreams = transform->miGraphDesc.nbSOs;
     ZL_ASSERT_EQ(nbIns, nbInputStreams);
     (void)nbIns;
@@ -271,10 +274,10 @@ static ZL_Report splitTransformWrapper(
     VECTOR(ZL_RBuffer)
     srcs = VECTOR_EMPTY(
             ZL_transformOutStreamsLimit(DI_getFrameFormatVersion(dictx)));
-    ZL_RET_R_IF_LT(
-            allocation,
+    ZL_ERR_IF_LT(
             VECTOR_RESERVE(srcs, nbInputStreams),
             nbInputStreams,
+            allocation,
             "splitTransformWrapper: Failed reserving vector");
     for (size_t i = 0; i < nbInputStreams; ++i) {
         ZL_ASSERT_EQ(ZL_Data_type(ins[i]), ZL_Type_serial);
@@ -291,7 +294,7 @@ static ZL_Report splitTransformWrapper(
     ZL_Output* const out = ZL_Decoder_create1OutStream(dictx, dstCapacity, 1);
     if (out == NULL) {
         VECTOR_DESTROY(srcs);
-        ZL_RET_R_ERR(allocation);
+        ZL_ERR(allocation);
     }
     ZL_WBuffer dst = { .start = ZL_Output_ptr(out), .capacity = dstCapacity };
     size_t const dstSize =
@@ -299,14 +302,14 @@ static ZL_Report splitTransformWrapper(
 
     VECTOR_DESTROY(srcs);
 
-    ZL_RET_R_IF_GT(
-            transform_executionFailure,
+    ZL_ERR_IF_GT(
             dstSize,
             dstCapacity,
+            transform_executionFailure,
             "transform %s failed",
             DT_getTransformName(transform));
 
-    ZL_RET_R_IF_ERR(ZL_Output_commit(out, dstSize));
+    ZL_ERR_IF_ERR(ZL_Output_commit(out, dstSize));
 
     return ZL_returnValue(1);
 }
@@ -420,7 +423,8 @@ ZL_Report DT_voTransformWrapper(
             dictx,
             ZL_codemodDatasAsInputs(ins),
             nbO1s,
-            ZL_codemodDatasAsInputs(ins) + nbO1s,
+            nbO1s ? ZL_codemodDatasAsInputs(ins) + nbO1s
+                  : ZL_codemodDatasAsInputs(ins),
             nbIns - nbO1s);
 }
 

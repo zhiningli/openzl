@@ -71,6 +71,11 @@ enum class OpenZLComponentID {
     CompressGeneric,
     BitSplit,
     BitSplitTop8,
+    TryParseInt,
+    SplitByParam,
+    SplitStructByParam,
+    SplitNumericByParam,
+    BitSplitFP,
     // Must be last enum value
     NumComponents,
 };
@@ -128,6 +133,12 @@ std::unique_ptr<OpenZLComponent> makeFieldLzComponent();
 std::unique_ptr<OpenZLComponent> makeCompressGenericComponent();
 std::unique_ptr<OpenZLComponent> makeBitSplitComponent();
 std::unique_ptr<OpenZLComponent> makeBitSplitTop8Component();
+std::unique_ptr<OpenZLComponent> makeTryParseIntComponent();
+std::unique_ptr<OpenZLComponent> makeSplitByParamComponent();
+std::unique_ptr<OpenZLComponent> makeSplitStructByParamComponent();
+std::unique_ptr<OpenZLComponent> makeSplitNumericByParamComponent();
+std::unique_ptr<OpenZLComponent> makeBitSplitFPComponent();
+
 } // namespace components
 
 inline std::unique_ptr<OpenZLComponent> makeOpenZLComponent(
@@ -226,6 +237,16 @@ inline std::unique_ptr<OpenZLComponent> makeOpenZLComponent(
             return components::makeBitSplitComponent();
         case OpenZLComponentID::BitSplitTop8:
             return components::makeBitSplitTop8Component();
+        case OpenZLComponentID::TryParseInt:
+            return components::makeTryParseIntComponent();
+        case OpenZLComponentID::SplitByParam:
+            return components::makeSplitByParamComponent();
+        case OpenZLComponentID::SplitStructByParam:
+            return components::makeSplitStructByParamComponent();
+        case OpenZLComponentID::SplitNumericByParam:
+            return components::makeSplitNumericByParamComponent();
+        case OpenZLComponentID::BitSplitFP:
+            return components::makeBitSplitFPComponent();
         case OpenZLComponentID::NumComponents:
         default:
             throw std::runtime_error("Invalid component");

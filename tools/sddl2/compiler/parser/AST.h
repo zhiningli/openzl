@@ -171,7 +171,7 @@ class ASTNum : public ASTConverted {
 
 class ASTVar : public ASTConverted {
    public:
-    explicit ASTVar(const Token& token);
+    explicit ASTVar(const Token& token, bool is_last_reference = false);
 
     const ASTVar* as_var() const override;
 
@@ -182,8 +182,12 @@ class ASTVar : public ASTConverted {
         return ConvertedNodeType::VAR;
     }
 
+    const std::string& name() const;
+    bool is_last_reference() const;
+
    private:
     const std::string name_;
+    bool is_last_reference_ = false;
 };
 
 class ASTField : public ASTConverted {
@@ -204,6 +208,8 @@ class ASTBuiltinField : public ASTField {
         return ConvertedNodeType::BUILTIN_FIELD;
     }
 
+    const Symbol& kw() const;
+
    private:
     const Symbol kw_;
 };
@@ -220,6 +226,8 @@ class ASTBytes : public ASTField {
     {
         return ConvertedNodeType::BYTES;
     }
+
+    const ASTPtr& len() const;
 
    private:
     static ASTPtr extract_len(const ASTPtr& paren_ptr);
@@ -239,6 +247,9 @@ class ASTRecord : public ASTField {
     {
         return ConvertedNodeType::RECORD;
     }
+
+    const ASTVec& params() const;
+    const ASTVec& fields() const;
 
    private:
     static ASTVec extract_fields(
@@ -267,6 +278,9 @@ class ASTArray : public ASTField {
         return ConvertedNodeType::ARRAY;
     }
 
+    const ASTPtr& field() const;
+    const ASTPtr& len() const;
+
    private:
     const ASTPtr field_;
     const ASTPtr len_;
@@ -284,6 +298,9 @@ class ASTOp : public ASTConverted {
     {
         return ConvertedNodeType::OP;
     }
+
+    const Op& op() const;
+    const ASTVec& args() const;
 
    private:
     const Op op_;
@@ -341,6 +358,11 @@ class Codegen {
         return op(Op::ASSUME, std::move(lhs), std::move(rhs));
     }
 
+    ASTPtr member(ASTPtr lhs, ASTPtr rhs) const
+    {
+        return op(Op::MEMBER, std::move(lhs), std::move(rhs));
+    }
+
     ASTPtr eq(ASTPtr lhs, ASTPtr rhs) const
     {
         return op(Op::EQ, std::move(lhs), std::move(rhs));
@@ -359,6 +381,11 @@ class Codegen {
     ASTPtr sub(ASTPtr lhs, ASTPtr rhs) const
     {
         return op(Op::SUB, std::move(lhs), std::move(rhs));
+    }
+
+    ASTPtr neg(ASTPtr arg) const
+    {
+        return op(Op::NEG, std::move(arg));
     }
 
     ASTPtr mul(ASTPtr lhs, ASTPtr rhs) const
@@ -412,6 +439,11 @@ class Codegen {
     ASTPtr var(poly::string_view name) const
     {
         return std::make_shared<ASTVar>(Token{ loc_, name });
+    }
+
+    ASTPtr var(poly::string_view name, bool is_last_reference) const
+    {
+        return std::make_shared<ASTVar>(Token{ loc_, name }, is_last_reference);
     }
 
     ASTPtr list(Symbol open_sym, ASTVec elts) const

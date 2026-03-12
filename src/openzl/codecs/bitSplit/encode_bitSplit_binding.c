@@ -14,7 +14,6 @@
 
 // Parameter IDs for bitSplit
 #define ZL_BITSPLIT_WIDTHS_PID 701
-#define ZL_BITSPLIT_NBWIDTHS_PID 702
 
 ZL_Report EI_bitSplit_withWidths(
         ZL_Encoder* eictx,
@@ -22,6 +21,7 @@ ZL_Report EI_bitSplit_withWidths(
         const uint8_t* bitWidths,
         size_t nbWidths)
 {
+    ZL_RESULT_DECLARE_SCOPE_REPORT(eictx);
     ZL_ASSERT_NN(eictx);
     ZL_ASSERT_NN(in);
     ZL_ASSERT_EQ(ZL_Input_type(in), ZL_Type_numeric);
@@ -38,18 +38,18 @@ ZL_Report EI_bitSplit_withWidths(
 
     // Validate parameters
     size_t sumWidths = 0;
-    ZL_RET_R_IF(
-            nodeParameter_invalid,
+    ZL_ERR_IF(
             !ZL_bitSplit_paramsAreValid(
                     bitWidths, nbWidths, inputEltWidthBits, &sumWidths),
+            nodeParameter_invalid,
             "bitSplit parameter validation failed");
 
     // Validate top bits are zero if partial coverage
     if (sumWidths < inputEltWidthBits) {
-        ZL_RET_R_IF(
-                corruption,
+        ZL_ERR_IF(
                 !ZL_bitSplit_topBitsAreZero(
                         ZL_Input_ptr(in), inputEltWidth, nbElts, sumWidths),
+                corruption,
                 "bitSplit: top bits must be zero for partial coverage");
     }
 
@@ -81,7 +81,7 @@ ZL_Report EI_bitSplit_withWidths(
         outputWidths[i] = ZL_bitSplit_outputEltWidth(bitWidths[i]);
         outputs[i] =
                 ZL_Encoder_createTypedStream(eictx, 0, nbElts, outputWidths[i]);
-        ZL_RET_R_IF_NULL(allocation, outputs[i]);
+        ZL_ERR_IF_NULL(outputs[i], allocation);
         dstPtrs[i] = ZL_Output_ptr(outputs[i]);
     }
 
@@ -97,7 +97,7 @@ ZL_Report EI_bitSplit_withWidths(
 
     // Commit all outputs
     for (size_t i = 0; i < nbWidths; i++) {
-        ZL_RET_R_IF_ERR(ZL_Output_commit(outputs[i], nbElts));
+        ZL_ERR_IF_ERR(ZL_Output_commit(outputs[i], nbElts));
     }
 
     return ZL_returnValue(nbWidths);
@@ -105,6 +105,7 @@ ZL_Report EI_bitSplit_withWidths(
 
 ZL_Report EI_bitSplit(ZL_Encoder* eictx, const ZL_Input* ins[], size_t nbIns)
 {
+    ZL_RESULT_DECLARE_SCOPE_REPORT(eictx);
     ZL_ASSERT_NN(eictx);
     ZL_ASSERT_EQ(nbIns, 1);
     ZL_ASSERT_NN(ins);
@@ -115,32 +116,25 @@ ZL_Report EI_bitSplit(ZL_Encoder* eictx, const ZL_Input* ins[], size_t nbIns)
     // Get parameters from local params
     ZL_RefParam const widthsParam =
             ZL_Encoder_getLocalParam(eictx, ZL_BITSPLIT_WIDTHS_PID);
-    ZL_IntParam const nbWidthsParam =
-            ZL_Encoder_getLocalIntParam(eictx, ZL_BITSPLIT_NBWIDTHS_PID);
 
-    ZL_RET_R_IF_EQ(
-            nodeParameter_invalid,
+    ZL_ERR_IF_EQ(
             widthsParam.paramId,
             ZL_LP_INVALID_PARAMID,
+            nodeParameter_invalid,
             "bitSplit requires bit widths parameter");
-    ZL_RET_R_IF_EQ(
-            nodeParameter_invalid,
-            nbWidthsParam.paramId,
-            ZL_LP_INVALID_PARAMID,
-            "bitSplit requires nbWidths parameter");
-    ZL_RET_R_IF_NULL(
-            nodeParameter_invalid,
+    ZL_ERR_IF_NULL(
             widthsParam.paramRef,
+            nodeParameter_invalid,
             "bitSplit bit widths parameter is NULL");
 
     const uint8_t* bitWidths = (const uint8_t*)widthsParam.paramRef;
-    size_t const nbWidths    = (size_t)nbWidthsParam.paramValue;
+    size_t const nbWidths    = widthsParam.paramSize;
 
     // Validate: must have at least one width
-    ZL_RET_R_IF_EQ(
-            nodeParameter_invalid,
+    ZL_ERR_IF_EQ(
             nbWidths,
             0,
+            nodeParameter_invalid,
             "bitSplit requires at least one bit width parameter");
 
     return EI_bitSplit_withWidths(eictx, in, bitWidths, nbWidths);
@@ -183,12 +177,7 @@ ZL_Compressor_buildBitSplitNode(
                                        .paramSize = nbWidths };
     ZL_LocalCopyParams const lgp   = { &widthsParam, 1 };
 
-    ZL_IntParam const nbWidthsParam = {
-        .paramId    = ZL_BITSPLIT_NBWIDTHS_PID,
-        .paramValue = (int)nbWidths,
-    };
-    ZL_LocalIntParams const lip     = { &nbWidthsParam, 1 };
-    ZL_LocalParams const lParams    = { .copyParams = lgp, .intParams = lip };
+    ZL_LocalParams const lParams    = { .copyParams = lgp };
     ZL_NodeParameters const nParams = { .localParams = &lParams };
 
     return ZL_Compressor_parameterizeNode(

@@ -124,7 +124,7 @@ std::string BenchmarkResult::pretty() const
     int len = snprintf(
             buffer,
             sizeof(buffer),
-            "%20s, %40s, %10.2f, %15.1f MB/s, %15.1f MB/s",
+            "%20s, %40s, %10.3f, %15.1f MB/s, %15.1f MB/s",
             trunc(fileName, 20, true).c_str(),
             trunc(compressorName, 40, false).c_str(),
             compressionRatio(),
@@ -150,6 +150,7 @@ std::vector<BenchmarkResult> benchmark(
 
     Logger::log_c(LogLevel::INFO, "%s", BenchmarkResult::header().c_str());
     std::vector<BenchmarkResult> results;
+    std::unordered_map<nlohmann::json, BenchmarkResult> summaryResults;
     for (const auto& input : inputs) {
         for (const auto& compressorConfig : args.compressorConfigs) {
             auto compressor = makeCompressor(compressorConfig);
@@ -211,7 +212,11 @@ std::vector<BenchmarkResult> benchmark(
             } while (!data.empty());
             Logger::log_c(LogLevel::INFO, "%s", result.pretty().c_str());
             results.push_back(result);
+            summaryResults[compressorConfig] += result;
         }
+    }
+    for (const auto& [compressorConfig, result] : summaryResults) {
+        Logger::log_c(LogLevel::INFO, "%s", result.pretty().c_str());
     }
     return results;
 }
